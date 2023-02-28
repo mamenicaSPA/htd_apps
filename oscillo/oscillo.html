@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <title>JavaScriptの説明</title>
+	<script src="20221227_oscillo.js"></script>
+  </head>
+  <body>
+	<textarea id="console" style="position: absolute; left: 1100px; top: 25;" ></textarea>
+    
+	<div style="position: absolute; left: 50px; top: 25px">
+		<label for="IPaddress">IPaddress</label>
+		<input id ="IPaddress" type="text" value = "192.168.10.150">
+		<label for="port">port</label>
+		<input id ="port"type="number" value="12345">
+	</div>
+	<div style="position: absolute; left: 1100px; top: 100px">
+		<label for="TRG1H">TRG1H</label><br>
+		<input id ="TRG1H" type="number" value="100"><br>
+		<label for="TRG1L">TRG1L</label><br>
+		<input id ="TRG1L"type="number" value="10"><br>
+		<label for="TRG2H">TRG2H</label><br>
+		<input id ="TRG2H"type="number" value="100"><br>
+		<label for="TRG2L">TRG2L</label><br>
+		<input id ="TRG2L"type="number" value="50">
+	</div>
+	<div style="position: absolute; left: 1100px; top: 50px">
+	<label for="filename">filename</label><br>
+	<input id ="filename"	type="text" value="data.csv">
+	</div>
+	<div>
+	
+	<div style="position: absolute; left: 1100px; top: 325px">
+	  <label for="CLKdiv1">ADC sampling CLK div</label><br>
+	  <input id ="CLKdiv1"type="number" value="0"><br>
+	  <div id="Srate">sampling rate</div>
+	  <label for="CLKdiv2">record CLK div</label><br>
+	  <input id ="CLKdiv2"type="number" value="0">
+	  <div id="Rrate">record rate</div>
+	</div>
+	
+	<div style="position: absolute; left:1100px; top: 475px">
+	  <label for="tau">tau</label><br>
+	  <input id ="tau"type="number" value="0"><br>
+	  <label for="div">div</label><br>
+	  <input id ="div"type="number" value="0"><br>
+	  <label for="sel">output select</label><br>
+	  <input id ="sel"type="number" value="3"><br>
+	  <label for="rate">refresh rate[second]</label><br>
+	  <input id ="rate"type="number" value="1.5"><br>
+	</div>
+		
+	
+	</div>
+    <div id="message"style="position: absolute; left: 25px; top: 0px;">Sample</div>
+	<input type="button" id ="connect" value="connect" 	onclick="connect()"	style="position: absolute; left: 550px; top: 25px; width:11em">
+	<input type="button" value="start" 	onclick="start()"	style="position: absolute; left: 1100px; top: 675px; width: 11em">
+	<input type="button" value="stop" 	onclick="stop()"	style="position: absolute; left: 1100px; top: 700px; width: 11em">
+	<input type="button" value="save" 	onclick="save()"	style="position: absolute; left: 1100px; top: 725px; width: 5em">
+	<input type="button" value="clear" 	onclick="clearrr()"	style="position: absolute; left: 1180px; top: 725px; width: 5em">
+	<div style="position: absolute; left: 500px; top: 850px">
+		<input type="button" value="<" 		onclick="xscroll('-1')">
+		<input type="button" value="xzoom" 	onclick="xzoom()">
+		<input type="button" value=">" 		onclick="xscroll('1')">
+	</div>
+	<div style="position: absolute; left: 500px; top: 875px">
+		<input type="button" value="<" 		onclick="yscroll('-1')">
+		<input type="button" value="yzoom" 	onclick="yzoom()">
+		<input type="button" value=">" 		onclick="yscroll('1')">
+	</div>
+	<div style="position: absolute; left: 0px; top: 434px; transform: rotate(-90deg)">
+		<div id="yscale0"style="position: absolute; left: -384px; top: 0px;">0</div>
+		<div id="yscale1"style="position: absolute; left: 0px; top: 0px;">512</div>
+		<div id="yscale2"style="position: absolute; left: 384px; top: 0px;">1024</div>
+	</div>
+	<div style="position: absolute; left: 520px; top: 825px;">
+		<div id="xscale0"style="position: absolute; left: -512px; top: 0px;">1</div>
+		<div id="xscale1"style="position: absolute; left: 0px; top: 0px;">512</div>
+		<div id="xscale2"style="position: absolute; left: 512px; top: 0px;">1024</div>
+	</div>
+	
+	<svg width ="1024" height ="768" viewBox="0 0 1024 768" style="position: absolute; left: 25px; top: 50px">
+	<line x1="0" y1="0" x2="1024" y2="0" stroke="black"/>		//枠はじめ
+	<line x1="0" y1="0" x2="0" y2="768" stroke="black"/>
+	<line x1="0" y1="768" x2="1024" y2="768" stroke="black"/>
+	<line x1="1024" y1="0" x2="1024" y2="768" stroke="black"/>	//枠おわり
+	<line x1="0" y1="192" x2="10" y2="192" stroke="black"/>		//yメモリ
+	<line x1="0" y1="384" x2="10" y2="384" stroke="black"/>		//yメモリ
+	<line x1="0" y1="576" x2="10" y2="576" stroke="black"/>		//yメモリ
+	<line x1="256" y1="768" x2="256" y2="758" stroke="black"/>	//xメモリ
+	<line x1="768" y1="768" x2="768" y2="758" stroke="black"/>	//xメモリ
+	<line x1="768" y1="768" x2="768" y2="758" stroke="black"/>	//xメモリ
+	<path stroke="red" fill="none"  id="path001"/>	//id:path001でjsから操作
+</svg>
+	
+  </body>
+</html>
