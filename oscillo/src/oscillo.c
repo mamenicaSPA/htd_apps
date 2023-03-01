@@ -10,6 +10,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include "websocket.h"
 
 #define GPIO_START	0x00001001
 #define GPIO_QUIRY	0x00001002
@@ -25,7 +26,39 @@
 #define GPIO_MASK	0xffff0000
 #define GPIO_DTSET(A,B) ((A)|((B)<<16)&0xffff0000)	
 
+#define CMD_START 1
+#define CMD_STOP_ 2
+#define CMD_ASTOP 3
+#define CMD_DTREQ 4
+#define CMD_DTGET 5
+#define CMD_STACK 6
 
+union hist_data{
+	unsigned int int32[4096];
+	unsigned char byte[4096*4];
+};
+
+struct gloval{
+	pthread_mutex_t lock;
+	pthread_cond_t sig;
+	int sock;
+	int Htrg1;
+	int Ltrg1;
+	int Htrg2;
+	int Ltrg2;
+	int clkdiv1;
+	int clkdiv2;
+	int tau;
+	int div1;
+	int div2;
+	int sel;
+	int command;
+	int astopflg;
+	int readflg;
+	char dmaflag;
+	char filename[128];
+	union hist_data hist;
+};
 
 void debug_mem(void *cfg,int len)
 {
@@ -33,6 +66,25 @@ void debug_mem(void *cfg,int len)
 	for(i=0;i<len;i++)
 		printf("%02x:%08x\n",4*i,*((uint32_t *)(cfg+4*i)));
 }
+
+int cmd_decode(char *buf){
+
+	if(strcmp(buf, "START")==0)
+		return CMD_START;
+	if(strcmp(buf, "STOP_")==0)
+		return CMD_STOP_;
+	if(strcmp(buf, "ASTOP")==0)
+		return CMD_ASTOP;
+	if(strcmp(buf, "DTREQ")==0)
+		return CMD_DTREQ;
+	if(strcmp(buf, "DTGET")==0)
+		return CMD_DTGET;
+	if(strcmp(buf, "STACK")==0)
+		return CMD_STACK;
+	return -1;
+}
+
+
 
 int oscillo_init(){
 	int fd;
@@ -90,8 +142,90 @@ int oscillo_init(){
 	return datacnt;
 }
 
-int main(void)
-{	
+void *wsthread(void *p){
+	struct gloval *gloval = ((struct groval*)p);
+	
+	char buf[1024];		//バッファ(1kB)
+	int n;
+	
+	union hist_data histgram;
+	unsigned char roopflag =1u;
+	int command;
+
+	struct ws_sock_t *ws_sock;
+	
+	int i;
+	
+	ws_sock = ws_init(gloval->sock);
+	
+	sprintf(buf,"connected");
+	ws_write(ws_sock,buf,strlen(buf),OPCD_TEXT);
+	
+	memset(histgram.int32,0,4096);
+	for(i=0;i<4096;i++)
+		histgram.int32[i] = i;
+	
+	//*******main loop*******//
+	while(roopflag){
+		command =0;
+		//receive
+		n = ws_read(ws_sock, buf, sizeof(buf)-1, NULL);
+		//printf("n:%08x,%d\n",n,n);
+	
+		if(n == READ_ERR_CLOSE)
+			break;
+		
+		command = cmd_decode(buf);
+		
+		switch(command){
+			case CMD_START:
+				sprintf(buf,"datatake start");
+				ws_write(ws_sock,buf,strlen(buf),OPCD_TEXT);
+				n=ws_read(ws_sock,buf,sizeof(buf)-1,NULL);
+				printf("r:%d,d:%d,o:%d\n%s\n",ws_sock->readlen,ws_sock->datalen,n,buf);
+//				sscanf(buf,"%d,%d,%d,%d,%d,%d,%d,%s"
+//				,&g.htrg1,&g.Ltrg1,&g.Htrg2,&g.Ltrg2,&g,div1,&g.div2,&g.tau,g.filename);
+				break;
+			case CMD_STOP_:
+				sprintf(buf,"datatake stop");
+				ws_write(ws_sock,buf,strlen(buf),OPCD_TEXT);
+				break;
+			case CMD_ASTOP:
+				sprintf(buf,"program stop");
+				ws_write(ws_sock,buf,strlen(buf),OPCD_TEXT);
+				n = ws_read(ws_sock, buf, sizeof(buf)-1, NULL);
+				printf("r:%d,d:%d,o:%d\n%s\n",ws_sock->readlen,ws_sock->datalen,n,buf);
+				break;
+			case CMD_DTREQ:
+				ws_write(ws_sock,histgram.byte,4096*4,OPCD_BIN);
+				break;
+			case CMD_DTGET:
+				sprintf(buf,"file send");
+				for(i=0;i<1024;i++)
+					histgram.int32[i]++;
+				ws_write(ws_sock,buf,strlen(buf),OPCD_TEXT);
+				break;
+			case CMD_STACK:
+				sprintf(buf,"status OK");
+				ws_write(ws_sock,buf,strlen(buf),OPCD_TEXT);
+				break;
+			default:
+				command = CMD_ASTOP;
+			break;
+		}
+		if(command == CMD_ASTOP)
+			roopflag = 0;
+	}
+	
+	ws_close(ws_sock);
+	printf("socket close\n");
+	return 0;
+	
+}
+
+void *fpgathread(void*p){
+	struct gloval *gloval = ((struct groval *)p);
+	
 	struct DMA_st *dma;
 	int command;
 	int i;
@@ -131,6 +265,11 @@ int main(void)
 		printf("%04d,0x%08x,%d\n",i,rdata,data);
 	}
 	DMA_close(dma);
+	
+}
+
+int main(void)
+{	
 	
 	return 0;
 }
