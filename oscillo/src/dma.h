@@ -5,6 +5,9 @@
 #include <fcntl.h>
 #include <stdlib.h>
 
+#define DMACFG_ADDR 0x80400000
+#define DMABUF_ADDR 0x1e000000
+
 struct S2MM_DMACR{
 	unsigned RS 			:1;
 	unsigned rsv0			:1;
@@ -80,10 +83,10 @@ struct DMA_st *DMA_init(){
 	}
 	/* map the memory */
 	dma->dmacfg = mmap(NULL, sysconf(_SC_PAGESIZE), 
-             PROT_READ|PROT_WRITE, MAP_SHARED, dma->dmafd, 0x80400000);
+             PROT_READ|PROT_WRITE, MAP_SHARED, dma->dmafd, DMACFG_ADDR);
 			 
 	dma->dmabuf = mmap(NULL, sysconf(_SC_PAGESIZE), 
-             PROT_READ|PROT_WRITE, MAP_SHARED, dma->dmafd, 0x1e000000);
+             PROT_READ|PROT_WRITE, MAP_SHARED, dma->dmafd, DMABUF_ADDR);
 	
 	dma->S2MM_DMACR  = dma->dmacfg + 0x30;
 	dma->S2MM_DMASR  = dma->dmacfg + 0x34;
@@ -92,7 +95,7 @@ struct DMA_st *DMA_init(){
 	
 	dma->S2MM_DMACR->int32 = 0x00000000;
 	
-	*dma->S2MM_DA = 0x1e000000;
+	*dma->S2MM_DA = DMABUF_ADDR;
 	
 	dma->S2MM_DMACR->bit.RESET = 1;
 	while(dma->S2MM_DMACR->bit.RESET==1);

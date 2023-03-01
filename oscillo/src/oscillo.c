@@ -41,17 +41,8 @@ union hist_data{
 struct gloval{
 	pthread_mutex_t lock;
 	pthread_cond_t sig;
+	struct config *conf;
 	int sock;
-	int Htrg1;
-	int Ltrg1;
-	int Htrg2;
-	int Ltrg2;
-	int clkdiv1;
-	int clkdiv2;
-	int tau;
-	int div1;
-	int div2;
-	int sel;
 	int command;
 	int astopflg;
 	int readflg;
@@ -83,8 +74,6 @@ int cmd_decode(char *buf){
 		return CMD_STACK;
 	return -1;
 }
-
-
 
 int oscillo_init(){
 	int fd;
@@ -181,10 +170,7 @@ void *wsthread(void *p){
 			case CMD_START:
 				sprintf(buf,"datatake start");
 				ws_write(ws_sock,buf,strlen(buf),OPCD_TEXT);
-				n=ws_read(ws_sock,buf,sizeof(buf)-1,NULL);
-				printf("r:%d,d:%d,o:%d\n%s\n",ws_sock->readlen,ws_sock->datalen,n,buf);
-//				sscanf(buf,"%d,%d,%d,%d,%d,%d,%d,%s"
-//				,&g.htrg1,&g.Ltrg1,&g.Htrg2,&g.Ltrg2,&g,div1,&g.div2,&g.tau,g.filename);
+				groval->conf = configload(ws_sock);
 				break;
 			case CMD_STOP_:
 				sprintf(buf,"datatake stop");
@@ -236,7 +222,7 @@ void *fpgathread(void*p){
 	
 	printf("fifo:%04d\n",oscillo_init());
 
-	*dma->S2MM_DA = 0x1e000000;
+	*dma->S2MM_DA = DMABUF_ADDR;
 	//debug_mem(dma->dmacfg,30);
 	dma->S2MM_DMACR->bit.RS = 1;
 	*dma->S2MM_LENGTH = 4096;
