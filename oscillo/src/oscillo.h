@@ -1,5 +1,12 @@
 #define MAX_CONFIG 32
 
+#define OSCFLGS_INIT	0x00000000
+#define OSCFLGS_FPGARST 0x00000001
+#define OSCFLGS_STOP	0x00000002
+#define OSCFLGS_ASTOP	0x00000004
+#define OSCFLGS_WRITTEN 0x00000008
+#define OSCFLGS_ERRDMA	0x00000010
+
 struct config{
 	char *bitstream;
 	int sock;
@@ -15,7 +22,7 @@ struct config{
 	int sel;
 }
 
-struct confug *configload(struct ws_sock_t *ws_sock)
+struct confug *config_recv(struct ws_sock_t *ws_sock)
 {
 	FILE *fp;
 	char buf[128];

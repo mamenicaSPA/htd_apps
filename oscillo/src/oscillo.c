@@ -44,9 +44,7 @@ struct gloval{
 	struct config *conf;
 	int sock;
 	int command;
-	int astopflg;
-	int readflg;
-	char dmaflag;
+	uint32_t flags;
 	char filename[128];
 	union hist_data hist;
 };
@@ -170,7 +168,13 @@ void *wsthread(void *p){
 			case CMD_START:
 				sprintf(buf,"datatake start");
 				ws_write(ws_sock,buf,strlen(buf),OPCD_TEXT);
+				pthread_mutex_lock(&gloval->lock);
 				groval->conf = configload(ws_sock);
+				if(gloval->flags & OSCFLGS_FPGARST ==0){
+					gloval->flags |= OSCFLGS_FPGARST;
+					pthread_cond_signal(gloval->sig);
+				}
+				pthread_mutex_unlock(&gloval->lock);
 				break;
 			case CMD_STOP_:
 				sprintf(buf,"datatake stop");
@@ -218,12 +222,21 @@ void *fpgathread(void*p){
 	uint32_t rdata;
 	int data;
 	
+	uint32_t *gflags = &gloval->flags;
+	pthread_mutex_t *glock = &gloval->lock;
+	pthread_cond_t  *gsig = &gloval->sig;
+	
 	dma = DMA_init();
 	
+	pthread_mutex_lock();
+	while((*gflags & OSCFLGS_FPGARST)==0)
+		pthread_cond_wait(gsig, glock);
+	*gflags &= ~OSCFLGS_FPGARST;
 	printf("fifo:%04d\n",oscillo_init());
+	pthread_mutex_unlock;
 
 	*dma->S2MM_DA = DMABUF_ADDR;
-	//debug_mem(dma->dmacfg,30);
+
 	dma->S2MM_DMACR->bit.RS = 1;
 	*dma->S2MM_LENGTH = 4096;
 	
@@ -239,17 +252,18 @@ void *fpgathread(void*p){
 			printf("SlvErr\n");
 			break;
 		}
-	
 	}
+	
 	printf("dataread:%d\n",*dma->S2MM_LENGTH);
-	
-	//debug_mem(dma->dmacfg,30);
-	
+
+	pthread_mutex_lock(glock);
 	for(i=0;i < *dma->S2MM_LENGTH /4;i++){
 		rdata=*((uint32_t *)(dma->dmabuf + 4*i));
 		data = (rdata&0x00002000)? rdata|0xffffc000:rdata&0x00003fff;
 		printf("%04d,0x%08x,%d\n",i,rdata,data);
 	}
+	pthread_mutex_unlock(glock);
+	
 	DMA_close(dma);
 	
 }
