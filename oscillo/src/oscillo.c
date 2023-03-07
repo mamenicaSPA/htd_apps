@@ -226,16 +226,20 @@ void *fpgathread(void*p){
 	pthread_mutex_t *glock = &gloval->lock;
 	pthread_cond_t  *gsig = &gloval->sig;
 	
+	//DMA初期化
 	dma = DMA_init();
 	
 	pthread_mutex_lock();
 	while((*gflags & OSCFLGS_FPGARST)==0)
 		pthread_cond_wait(gsig, glock);
 	*gflags &= ~OSCFLGS_FPGARST;
+	//TRG,CLK設定,FIFOリセット
 	printf("fifo:%04d\n",oscillo_init());
 	pthread_mutex_unlock;
+	
+	//初期化が完了
 
-	*dma->S2MM_DA = DMABUF_ADDR;
+	
 
 	dma->S2MM_DMACR->bit.RS = 1;
 	*dma->S2MM_LENGTH = 4096;
@@ -265,11 +269,11 @@ void *fpgathread(void*p){
 	pthread_mutex_unlock(glock);
 	
 	DMA_close(dma);
-	
 }
 
-int main(void)
+int main(int arg,char *argv[])
 {	
+	
 	
 	return 0;
 }
