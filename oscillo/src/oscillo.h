@@ -1,11 +1,16 @@
 #define MAX_CONFIG 32
 
-#define OSCFLGS_INIT	0x00000000
-#define OSCFLGS_FPGARST 0x00000001
-#define OSCFLGS_STOP	0x00000002
-#define OSCFLGS_ASTOP	0x00000004
-#define OSCFLGS_WRITTEN 0x00000008
-#define OSCFLGS_ERRDMA	0x00000010
+//OSCFLGS : スレッド間通信フラグ．フラグが立つまで待機，フラグが立ったらループ終了などの指令情報共有
+#define OSCFLGS_INIT	0x00000000	//0にセット
+#define OSCFLGS_FPGARST 0x00000001	//ws->FPGA FPGAリセット要求(TRG設定，FIFOクリア等)
+#define OSCFLGS_STOP	0x00000002	//ws->FPGA ヒストグラム更新ループ停止
+#define OSCFLGS_ASTOP	0x00000004	//ws->FPGA FPGA全体ループ停止
+#define OSCFLGS_WRITTEN 0x00000008	//FPGA->ws DMA正常読み取り完了
+#define OSCFLGS_ERRDMA	0x00000010	//FPGA->ws DMAエラー終了フラグ
+union hist_data{
+	unsigned int int32[4096];
+	unsigned char byte[4096*4];
+};
 
 struct config{
 	char *bitstream;
@@ -31,8 +36,9 @@ struct confug *config_recv(struct ws_sock_t *ws_sock)
 	
 	int i=0;
 	
-	if(conf == NULL)
-		conf = malloc(sizeof(struct config));
+	if(conf != NULL)
+		free(conf);
+	conf = malloc(sizeof(struct config));
 	
 	while(i++ < MAX_CONFIG){
 		ws_read(ws_sock, buf, sizeof(buf), NULL);
@@ -68,4 +74,10 @@ struct confug *config_recv(struct ws_sock_t *ws_sock)
 	}
 	
 	return 0;
+}
+	
+void rdata_decode(void *buf, uint32_t rdata, int i)
+{
+	union hist_data *data = (union histdata*)buf;
+	data->int32[i] = (rdata&0x00002000)? rdata|0xffffc000 : rdata&0x00003fff;
 }

@@ -11,6 +11,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include "websocket.h"
+#include "dma.h"
+#include "oscillo.h"
 
 #define GPIO_START	0x00001001
 #define GPIO_QUIRY	0x00001002
@@ -33,10 +35,7 @@
 #define CMD_DTGET 5
 #define CMD_STACK 6
 
-union hist_data{
-	unsigned int int32[4096];
-	unsigned char byte[4096*4];
-};
+
 
 struct gloval{
 	pthread_mutex_t lock;
@@ -48,13 +47,6 @@ struct gloval{
 	char filename[128];
 	union hist_data hist;
 };
-
-void debug_mem(void *cfg,int len)
-{
-	unsigned int i;
-	for(i=0;i<len;i++)
-		printf("%02x:%08x\n",4*i,*((uint32_t *)(cfg+4*i)));
-}
 
 int cmd_decode(char *buf){
 
@@ -214,7 +206,7 @@ void *wsthread(void *p){
 }
 
 void *fpgathread(void*p){
-	struct gloval *gloval = ((struct groval *)p);
+	struct gloval *g = ((struct groval *)p);
 	
 	struct DMA_st *dma;
 	int command;
@@ -222,74 +214,62 @@ void *fpgathread(void*p){
 	uint32_t rdata;
 	int data;
 	
-	uint32_t *gflags = &gloval->flags;
-	pthread_mutex_t *glock = &gloval->lock;
-	pthread_cond_t  *gsig = &gloval->sig;
+	uint32_t *gflags = &g->flags;
+	pthread_mutex_t *glock = &g->lock;
+	pthread_cond_t  *gsig = &g->sig;
 	
 	//DMA初期化
 	dma = DMA_init();
 	
-	pthread_mutex_lock();
-	while((*gflags & OSCFLGS_FPGARST)==0)
-		pthread_cond_wait(gsig, glock);
-	*gflags &= ~OSCFLGS_FPGARST;
-	//TRG,CLK設定,FIFOリセット
-	printf("fifo:%04d\n",oscillo_init());
-	pthread_mutex_unlock;
+	while(*gflags & OSCFLGS_ASTOP == 0){
+		
+		pthread_mutex_lock();
+		while((*gflags & OSCFLGS_FPGARST)==0)
+			pthread_cond_wait(gsig, glock);	//リセットフラグが1になるまで待機(configload中)
+		*gflags &= ~OSCFLGS_FPGARST;		//リセットフラグを0にセット
+		//TRG,CLK設定,FIFOリセット
+		printf("fifo:%04d\n",oscillo_init());
+		pthread_mutex_unlock;
 	
-	//初期化が完了
+		//初期化が完了
 
-	
-
-	dma->S2MM_DMACR->bit.RS = 1;
-	*dma->S2MM_LENGTH = 4096;
-	
-	while(1){
-		if(dma->S2MM_DMASR->bit.Idle == 1)
-			break;
-		if(dma->S2MM_DMASR->bit.DMAIntErr==1){
-			printf("IntErr\n");
-			break;
-		}
-			
-		if(dma->S2MM_DMASR->bit.DMASlvErr==1){
-			printf("SlvErr\n");
-			break;
+		while(*gflags & OSCFLGS_STOP == 0){
+			pthread_mutex_lock(glock);
+			DMA_read(dma,4096,(void*)&g->hist,read_decode);
+			if(g->flgs&OSCFLGS_WEITTEN==0)
+				pthread_cond_signal(gsig, glock);
+			g->flgs |= OSCFLGS_WEITTEN;
+			pthread_mutex_unlock(glock);
 		}
 	}
-	
-	printf("dataread:%d\n",*dma->S2MM_LENGTH);
-
-	pthread_mutex_lock(glock);
-	for(i=0;i < *dma->S2MM_LENGTH /4;i++){
-		rdata=*((uint32_t *)(dma->dmabuf + 4*i));
-		data = (rdata&0x00002000)? rdata|0xffffc000:rdata&0x00003fff;
-		printf("%04d,0x%08x,%d\n",i,rdata,data);
-	}
-	pthread_mutex_unlock(glock);
-	
 	DMA_close(dma);
 }
 
 int main(int args, char *argv[])//arg1:sock,
 {
-	char buf[1024];		//バッファ(1kB)
-	int n;
-	
-	union hist_data histgram;
+	pthread_t th_fpga;
+	pthread_t th_wsock;
 	unsigned char roopflag =1u;
 	int command;
 
-	struct ws_sock_t *ws_sock;
+	struct gloval g;
 	
 	int i;
 	
-	//if unit test mode make socket
 	if(args <2){
-		printf("you mast args\n");
+		printf("you need args\n");
 		return -1;
 	}
 
-	ws_sock = ws_init(atoi(argv[1]));
+	gloval.sock = atoi(argv[1]);
+	
+	pthread_create(&th_wsock,NULL,&wsthread,&g);
+	pthread_create(&th_fpga,NULL,&fpgathread,&g);
+	
+	pthread_join(th_wsock,NULL);
+	pthread_join(th_fpga,NULL);
+	
+	printf("joind child\n");
+	
 	return 0;
 }

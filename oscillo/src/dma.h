@@ -96,7 +96,7 @@ struct DMA_st *DMA_init(){
 	dma->S2MM_DMACR->int32 = 0x00000000;
 	
 	*dma->S2MM_DA = DMABUF_ADDR;
-	
+
 	dma->S2MM_DMACR->bit.RESET = 1;
 	while(dma->S2MM_DMACR->bit.RESET==1);
 	printf("DMA idle\n");
@@ -110,4 +110,40 @@ int DMA_close(struct DMA_st *dma){
 	close(dma->dmafd);
 	free(dma);
 	return 0;
+}
+
+int DMA_read(struct DMA_st *dma,int rqlen,void *buf,void (*format)(void *,uint32_t,int)){
+	int readlen = 0;
+	int len = 0;
+	uint32_t rdata;
+	
+	while(readlen < rqlen)
+		if(rqlen - readlen >1024)
+			len = 4096;
+		else
+			len = readlen*4;
+		
+		dma->S2MM_DMACR->bit.RS = 1;
+		*dma->S2MM_LENGTH = len;
+		
+		while(1){
+			if(dma->S2MM_DMASR->bit.Idle == 1)
+				break;
+			if(dma->S2MM_DMASR->bit.DMAIntErr==1){
+				printf("IntErr\n");
+				return -1;
+			}
+			if(dma->S2MM_DMASR->bit.DMASlvErr==1){
+				printf("SlvErr\n");
+				return -1;
+			}
+		}
+		readlen += *dma->S2MM_LENGTH/4
+		printf("dataread:%d\n",*dma->S2MM_LENGTH);
+
+		for(i=0;i < *dma->S2MM_LENGTH /4;i++){
+			rdata=*((uint32_t *)(dma->dmabuf + 4*i));
+			(*format)(buf, rdata,i);
+		}
+	
 }
