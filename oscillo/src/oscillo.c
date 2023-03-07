@@ -271,9 +271,25 @@ void *fpgathread(void*p){
 	DMA_close(dma);
 }
 
-int main(int arg,char *argv[])
-{	
+int main(int args, char *argv[])//arg1:sock,
+{
+	char buf[1024];		//バッファ(1kB)
+	int n;
 	
+	union hist_data histgram;
+	unsigned char roopflag =1u;
+	int command;
+
+	struct ws_sock_t *ws_sock;
 	
+	int i;
+	
+	//if unit test mode make socket
+	if(args <2){
+		printf("you mast args\n");
+		return -1;
+	}
+
+	ws_sock = ws_init(atoi(argv[1]));
 	return 0;
 }
