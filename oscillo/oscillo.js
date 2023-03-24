@@ -113,21 +113,30 @@ function start(){
 			}
 			//statuscheckを停止，
 			clearInterval(statchkInt);
-			let trg1h = document.getElementById("TRG1H").value;
-			let trg1l = document.getElementById("TRG1L").value;
-			let trg2h = document.getElementById("TRG2H").value;
-			let trg2l = document.getElementById("TRG2L").value;
-			let clkdiv1 = document.getElementById("CLKdiv1").value;
-			let clkdiv2 = document.getElementById("CLKdiv2").value;
-			let tau = document.getElementById("tau").value;
-			let div = document.getElementById("div").value;
-			let sel = document.getElementById("sel").value;
-			let fname= document.getElementById("filename").value;
-	
-			let setting = trg1h+','+trg1l+','+trg2h+','+trg2l+','+clkdiv1+','+clkdiv2+','+tau+','+div+','+sel+','+fname;
-			console.log(setting);
+			let setting = "Htrg1"+"="+document.getElementById("TRG1H").value;
 			ws.send(setting);
-			rate = document.getElementById("rate").value*  1000;
+			let setting = "Ltrg1"+"="+document.getElementById("TRG1L").value;
+			ws.send(setting);
+			let setting = "Htrg2"+"="+document.getElementById("TRG2H").value;
+			ws.send(setting);
+			let setting = "Ltrg2"+"="+document.getElementById("TRG2L").value;
+			ws.send(setting);
+			let setting = "clkdiv1"+"="+document.getElementById("CLKdiv1").value;
+			ws.send(setting);
+			let setting = "clkdiv2"+"="+document.getElementById("CLKdiv2").value;
+			ws.send(setting);
+			let tsetting = "trptau"+"="+document.getElementById("tau").value;
+			ws.send(setting);
+			let dsetting = "trpdiv1"+"="+document.getElementById("div").value;
+			ws.send(setting);
+			let setting = "trpdiv2"+"="+document.getElementById("sel").value;
+			ws.send(setting);
+			let setting = "fname"+"="+document.getElementById("filename").value;
+			ws.send(setting);
+			let setting = "#end";
+			ws.send(setting);
+			
+			rate = document.getElementById("rate").value* 1000;
 			dtgetInt = setInterval(dataget,rate);
 			break;
 		case ST_DATATAKE:

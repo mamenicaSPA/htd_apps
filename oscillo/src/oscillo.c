@@ -35,8 +35,6 @@
 #define CMD_DTGET 5
 #define CMD_STACK 6
 
-
-
 struct gloval{
 	pthread_mutex_t lock;
 	pthread_cond_t sig;
@@ -141,8 +139,10 @@ void *wsthread(void *p){
 	ws_write(ws_sock,buf,strlen(buf),OPCD_TEXT);
 	
 	memset(histgram.int32,0,4096);
+	/*
 	for(i=0;i<4096;i++)
 		histgram.int32[i] = i;
+	*/
 	
 	//*******main loop*******//
 	while(roopflag){
