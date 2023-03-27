@@ -7,6 +7,8 @@
 #define OSCFLGS_ASTOP	0x00000004	//ws->FPGA FPGA全体ループ停止
 #define OSCFLGS_WRITTEN 0x00000008	//FPGA->ws DMA正常読み取り完了
 #define OSCFLGS_ERRDMA	0x00000010	//FPGA->ws DMAエラー終了フラグ
+#define OSCFLGS_DTREQ	0x00000020 
+
 union hist_data{
 	unsigned int int32[4096];
 	unsigned char byte[4096*4];
@@ -25,9 +27,9 @@ struct config{
 	int div1;
 	int div2;
 	int sel;
-}
+};
 
-struct confug *config_recv(struct ws_sock_t *ws_sock)
+int config_recv(struct ws_sock_t *ws_sock,struct config *conf)
 {
 	FILE *fp;
 	char buf[128];
@@ -36,13 +38,11 @@ struct confug *config_recv(struct ws_sock_t *ws_sock)
 	
 	int i=0;
 	
-	if(conf != NULL)
-		free(conf);
-	conf = malloc(sizeof(struct config));
-	
 	while(i++ < MAX_CONFIG){
 		ws_read(ws_sock, buf, sizeof(buf), NULL);
 		sscanf(buf,"%[^=]=%s",item,param);
+		
+		printf("item:%s,param:%s\n",item,param);
 
 		if(strcmp(item,"bitstream")		==0){
 			free(conf->bitstream);
@@ -78,6 +78,7 @@ struct confug *config_recv(struct ws_sock_t *ws_sock)
 	
 void rdata_decode(void *buf, uint32_t rdata, int i)
 {
-	union hist_data *data = (union histdata*)buf;
+	union hist_data *data = (union hist_data*)buf;
 	data->int32[i] = (rdata&0x00002000)? rdata|0xffffc000 : rdata&0x00003fff;
+	printf("%d,%x,%d\n",i,rdata,data->int32[i]);
 }

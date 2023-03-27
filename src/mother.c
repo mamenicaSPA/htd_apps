@@ -8,10 +8,9 @@
 #include <sys/wait.h>
 #include <pthread.h>
 
-#define PROG_DEBUG	 "/home/pi/servertest/child"
-#define PROG_TEST 	 "/home/pi/servertest/child"
-#define PROG_OSCILLO "/home/pi/servertest/child"
-#define PROG_MCAMCS  "/home/pi/servertest/child"
+#define PROG_TEST 	 "/opt/redpitaya/www/apps/htd_apps/test/test"
+#define PROG_OSCILLO "/opt/redpitaya/www/apps/htd_apps/oscillo/oscillo"
+#define PROG_MCAMCS  "/opt/redpitaya/www/apps/htd_apps/mcamcs/mcamcs"
 
 #define PORT_DEBUG	 10000
 #define PORT_TEST	 10001
@@ -120,9 +119,11 @@ int main()
 	struct thread_args th_mcas;
 	
 	//daemon()
+	/*
 	if (daemon(0, 0) != 0) {
     return 1;
 	}
+	*/
 	
 	th_test.prog = strdup(   PROG_TEST);
 	th_osci.prog = strdup(PROG_OSCILLO);

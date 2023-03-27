@@ -1,6 +1,7 @@
 const ST_IDLE_NCOM	= 0;	//default, disconect status
 const ST_IDLE_COM	= 1;	//conected, idling status
 const ST_DATATAKE	= 2;	//conected, datataking status
+const BITSTREAM = "/opt/redpitaya/www/apps/htd_apps/oscillo/oscillo.bit";
 
 let connectingflg =false;
 let ws;
@@ -113,27 +114,30 @@ function start(){
 			}
 			//statuscheckを停止，
 			clearInterval(statchkInt);
-			let setting = "Htrg1"+"="+document.getElementById("TRG1H").value;
+			let setting
+			setting = "bitstream"+"="+ BITSTREAM;
 			ws.send(setting);
-			let setting = "Ltrg1"+"="+document.getElementById("TRG1L").value;
+			setting = "Htrg1"+"="+document.getElementById("TRG1H").value;
 			ws.send(setting);
-			let setting = "Htrg2"+"="+document.getElementById("TRG2H").value;
+			setting = "Ltrg1"+"="+document.getElementById("TRG1L").value;
 			ws.send(setting);
-			let setting = "Ltrg2"+"="+document.getElementById("TRG2L").value;
+			setting = "Htrg2"+"="+document.getElementById("TRG2H").value;
 			ws.send(setting);
-			let setting = "clkdiv1"+"="+document.getElementById("CLKdiv1").value;
+			setting = "Ltrg2"+"="+document.getElementById("TRG2L").value;
 			ws.send(setting);
-			let setting = "clkdiv2"+"="+document.getElementById("CLKdiv2").value;
+			setting = "clkdiv1"+"="+document.getElementById("CLKdiv1").value;
 			ws.send(setting);
-			let tsetting = "trptau"+"="+document.getElementById("tau").value;
+			setting = "clkdiv2"+"="+document.getElementById("CLKdiv2").value;
 			ws.send(setting);
-			let dsetting = "trpdiv1"+"="+document.getElementById("div").value;
+			setting = "trptau"+"="+document.getElementById("tau").value;
 			ws.send(setting);
-			let setting = "trpdiv2"+"="+document.getElementById("sel").value;
+			setting = "trpdiv1"+"="+document.getElementById("div").value;
 			ws.send(setting);
-			let setting = "fname"+"="+document.getElementById("filename").value;
+			setting = "trpdiv2"+"="+document.getElementById("sel").value;
 			ws.send(setting);
-			let setting = "#end";
+			setting = "fname"+"="+document.getElementById("filename").value;
+			ws.send(setting);
+			setting = "#end";
 			ws.send(setting);
 			
 			rate = document.getElementById("rate").value* 1000;

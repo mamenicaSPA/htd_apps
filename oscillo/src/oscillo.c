@@ -4,6 +4,7 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <stdlib.h>
+#include <pthread.h>
 
 #include <sys/select.h>
 
@@ -14,17 +15,17 @@
 #include "dma.h"
 #include "oscillo.h"
 
-#define GPIO_START	0x00001001
-#define GPIO_QUIRY	0x00001002
-#define GPIO_READ	0x00001004
-#define GPIO_STOP	0x00001008
-#define GPIO_TRG1H	0x00001010
-#define GPIO_TRG1L	0x00001020
-#define GPIO_TRG2H	0x00001040
-#define GPIO_TRG2L	0x00001080
-#define GPIO_DIVSET	0x00001100
-#define GPIO_M_SET	0x00001200
-#define GPIO_ZERO	0x00001000
+#define GPIO_START	0x00000001
+#define GPIO_QUIRY	0x00000002
+#define GPIO_READ	0x00000004
+#define GPIO_STOP	0x00000008
+#define GPIO_TRG1H	0x00000010
+#define GPIO_TRG1L	0x00000020
+#define GPIO_TRG2H	0x00000040
+#define GPIO_TRG2L	0x00000080
+#define GPIO_DIVSET	0x00000100
+#define GPIO_M_SET	0x00000200
+#define GPIO_ZERO	0x00000000
 #define GPIO_MASK	0xffff0000
 #define GPIO_DTSET(A,B) ((A)|((B)<<16)&0xffff0000)	
 
@@ -38,7 +39,7 @@
 struct gloval{
 	pthread_mutex_t lock;
 	pthread_cond_t sig;
-	struct config *conf;
+	struct config conf;
 	int sock;
 	int command;
 	uint32_t flags;
@@ -63,41 +64,47 @@ int cmd_decode(char *buf){
 	return -1;
 }
 
-int oscillo_init(){
+int oscillo_init(struct config conf){
 	int fd;
 	void *cfg;
 	char *name = "/dev/mem";
 	uint32_t wtdata;
-	uint32_t clkdiv1 = 0;
-	uint32_t clkdiv2 = 2;
-	uint32_t tau = 0;
-	uint32_t div = 6;
-	uint32_t sel = 2;
 	uint32_t datacnt;
+	char sysarg[128];
 	
+	//bitstreamの書き込み
+	sprintf(sysarg,"cat %s > /dev/xdevcfg",conf.bitstream);
+	system(sysarg);
+	
+	//"dev/mem"(メモリ直セスアクセスファイル)のopen->mmap
 	if((fd = open(name, O_RDWR)) < 0) {
     perror("open");
 	return -1;
 	}
 	cfg = mmap(NULL, sysconf(_SC_PAGESIZE), 
              PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0x42000000);
-			 
-	wtdata = 0x100;		 
+	
+	//各種設定パラメータの書き込み
+	wtdata = conf.Htrg1;
+	printf("wtdata:%x\n",wtdata);
 	*((uint32_t *)(cfg + 0)) = GPIO_DTSET(GPIO_TRG1H,wtdata);
 	*((uint32_t *)(cfg + 0)) = GPIO_DTSET(GPIO_ZERO ,wtdata);
 	*((uint32_t *)(cfg + 0)) = GPIO_ZERO;
 
-	wtdata = 0x10;
+	wtdata = conf.Ltrg1;
+	printf("wtdata:%x\n",wtdata);
 	*((uint32_t *)(cfg + 0)) = GPIO_DTSET(GPIO_TRG1L,wtdata);
 	*((uint32_t *)(cfg + 0)) = GPIO_DTSET(GPIO_ZERO ,wtdata);
 	*((uint32_t *)(cfg + 0)) = GPIO_ZERO;
 
-	wtdata = clkdiv1 | clkdiv2<<4;
+	wtdata = conf.clkdiv1 | conf.clkdiv2<<4;
+	printf("wtdata:%x\n",wtdata);
 	*((uint32_t *)(cfg + 0)) = GPIO_DTSET(GPIO_DIVSET,wtdata);
 	*((uint32_t *)(cfg + 0)) = GPIO_DTSET(GPIO_ZERO ,wtdata);
 	*((uint32_t *)(cfg + 0)) = GPIO_ZERO;
 	
-	wtdata = tau | (div<<5) | (sel<<10);
+	wtdata = conf.tau | (conf.div1<<5) | (conf.div2<<10);
+	printf("wtdata:%x\n",wtdata);
 	*((uint32_t *)(cfg + 0)) = GPIO_DTSET(GPIO_M_SET,wtdata);
 	*((uint32_t *)(cfg + 0)) = GPIO_DTSET(GPIO_ZERO ,wtdata);
 	*((uint32_t *)(cfg + 0)) = GPIO_ZERO;
@@ -113,6 +120,7 @@ int oscillo_init(){
 	datacnt = *((uint32_t *)(cfg + 8))&(~GPIO_MASK);
 	*((uint32_t *)(cfg + 0)) = GPIO_ZERO;
 	
+	//"dev/mem"のクローズ(初期設定時しか使用しないため)
 	munmap(cfg,sysconf(_SC_PAGESIZE));
 	close(fd);
 	
@@ -120,12 +128,11 @@ int oscillo_init(){
 }
 
 void *wsthread(void *p){
-	struct gloval *gloval = ((struct groval*)p);
+	struct gloval *gloval = ((struct gloval*)p);
 	
 	char buf[1024];		//バッファ(1kB)
 	int n;
 	
-	union hist_data histgram;
 	unsigned char roopflag =1u;
 	int command;
 
@@ -138,10 +145,10 @@ void *wsthread(void *p){
 	sprintf(buf,"connected");
 	ws_write(ws_sock,buf,strlen(buf),OPCD_TEXT);
 	
-	memset(histgram.int32,0,4096);
+	memset(gloval->hist.int32,0,4096);
 	/*
 	for(i=0;i<4096;i++)
-		histgram.int32[i] = i;
+		gloval->hist.int32[i] = i;
 	*/
 	
 	//*******main loop*******//
@@ -158,33 +165,52 @@ void *wsthread(void *p){
 		
 		switch(command){
 			case CMD_START:
+				gloval -> flags = 0;
 				sprintf(buf,"datatake start");
 				ws_write(ws_sock,buf,strlen(buf),OPCD_TEXT);
 				pthread_mutex_lock(&gloval->lock);
-				groval->conf = configload(ws_sock);
-				if(gloval->flags & OSCFLGS_FPGARST ==0){
+				config_recv(ws_sock,&gloval->conf);
+				printf("flg:%x\n",gloval->flags);
+				if((gloval->flags & OSCFLGS_FPGARST) ==0){
+					printf("FPGARSTsig\n");
 					gloval->flags |= OSCFLGS_FPGARST;
-					pthread_cond_signal(gloval->sig);
+					pthread_cond_signal(&gloval->sig);
 				}
+				printf("flg:%x\n",gloval->flags);
 				pthread_mutex_unlock(&gloval->lock);
 				break;
 			case CMD_STOP_:
 				sprintf(buf,"datatake stop");
 				ws_write(ws_sock,buf,strlen(buf),OPCD_TEXT);
+				pthread_mutex_lock(&gloval->lock);
+				gloval->flags |= OSCFLGS_STOP;
+				pthread_cond_signal(&gloval->sig);
+				pthread_mutex_unlock(&gloval->lock);
 				break;
 			case CMD_ASTOP:
 				sprintf(buf,"program stop");
 				ws_write(ws_sock,buf,strlen(buf),OPCD_TEXT);
 				n = ws_read(ws_sock, buf, sizeof(buf)-1, NULL);
 				printf("r:%d,d:%d,o:%d\n%s\n",ws_sock->readlen,ws_sock->datalen,n,buf);
+				pthread_mutex_lock(&gloval->lock);
+				gloval->flags |= OSCFLGS_ASTOP | OSCFLGS_STOP;
+				pthread_cond_signal(&gloval->sig);
+				pthread_mutex_unlock(&gloval->lock);
 				break;
 			case CMD_DTREQ:
-				ws_write(ws_sock,histgram.byte,4096*4,OPCD_BIN);
+				pthread_mutex_lock(&gloval->lock);
+				if((gloval->flags & OSCFLGS_DTREQ) ==0){
+					printf("DTREQsig\n");
+					gloval->flags |= OSCFLGS_DTREQ;
+					pthread_cond_signal(&gloval->sig);
+				}
+				ws_write(ws_sock,gloval->hist.byte,4096*4,OPCD_BIN);
+				pthread_mutex_unlock(&gloval->lock);
 				break;
 			case CMD_DTGET:
 				sprintf(buf,"file send");
 				for(i=0;i<1024;i++)
-					histgram.int32[i]++;
+					gloval->hist.int32[i]++;
 				ws_write(ws_sock,buf,strlen(buf),OPCD_TEXT);
 				break;
 			case CMD_STACK:
@@ -206,7 +232,7 @@ void *wsthread(void *p){
 }
 
 void *fpgathread(void*p){
-	struct gloval *g = ((struct groval *)p);
+	struct gloval *g = ((struct gloval *)p);
 	
 	struct DMA_st *dma;
 	int command;
@@ -221,24 +247,27 @@ void *fpgathread(void*p){
 	//DMA初期化
 	dma = DMA_init();
 	
-	while(*gflags & OSCFLGS_ASTOP == 0){
+	while((*gflags & OSCFLGS_ASTOP) == 0){
 		
-		pthread_mutex_lock();
+		pthread_mutex_lock(glock);
+		printf("gflg%x\n",*gflags);
 		while((*gflags & OSCFLGS_FPGARST)==0)
 			pthread_cond_wait(gsig, glock);	//リセットフラグが1になるまで待機(configload中)
 		*gflags &= ~OSCFLGS_FPGARST;		//リセットフラグを0にセット
+		printf("gflg%x\n",*gflags);
 		//TRG,CLK設定,FIFOリセット
-		printf("fifo:%04d\n",oscillo_init());
-		pthread_mutex_unlock;
+		printf("fifo:%04d\n",oscillo_init(g->conf));
+		pthread_mutex_unlock(glock);
 	
 		//初期化が完了
 
-		while(*gflags & OSCFLGS_STOP == 0){
+		while((*gflags & OSCFLGS_STOP) == 0){
 			pthread_mutex_lock(glock);
-			DMA_read(dma,4096,(void*)&g->hist,read_decode);
-			if(g->flgs&OSCFLGS_WEITTEN==0)
-				pthread_cond_signal(gsig, glock);
-			g->flgs |= OSCFLGS_WEITTEN;
+			if(DMA_read(dma,4096,(void*)&g->hist,rdata_decode)<0)
+				*gflags |= OSCFLGS_STOP|OSCFLGS_ASTOP|OSCFLGS_ERRDMA;
+			while((*gflags & (OSCFLGS_DTREQ|OSCFLGS_STOP|OSCFLGS_ASTOP))==0)
+				pthread_cond_wait(gsig, glock);	//DTREQがくるまで待機
+			*gflags &= ~OSCFLGS_DTREQ;			//フラグを0にセット
 			pthread_mutex_unlock(glock);
 		}
 	}
@@ -260,8 +289,10 @@ int main(int args, char *argv[])//arg1:sock,
 		printf("you need args\n");
 		return -1;
 	}
-
-	gloval.sock = atoi(argv[1]);
+	
+	pthread_cond_init(&g.sig,NULL);
+	pthread_mutex_init(&g.lock,NULL);
+	g.sock = atoi(argv[1]);
 	
 	pthread_create(&th_wsock,NULL,&wsthread,&g);
 	pthread_create(&th_fpga,NULL,&fpgathread,&g);

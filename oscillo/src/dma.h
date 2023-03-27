@@ -79,7 +79,7 @@ struct DMA_st *DMA_init(){
 	
 	if((dma->dmafd = open(name, O_RDWR)) < 0) {
     perror("open");
-    return -1;
+    return NULL;
 	}
 	/* map the memory */
 	dma->dmacfg = mmap(NULL, sysconf(_SC_PAGESIZE), 
@@ -99,6 +99,7 @@ struct DMA_st *DMA_init(){
 
 	dma->S2MM_DMACR->bit.RESET = 1;
 	while(dma->S2MM_DMACR->bit.RESET==1);
+	
 	printf("DMA idle\n");
 
 	return dma;
@@ -115,18 +116,22 @@ int DMA_close(struct DMA_st *dma){
 int DMA_read(struct DMA_st *dma,int rqlen,void *buf,void (*format)(void *,uint32_t,int)){
 	int readlen = 0;
 	int len = 0;
+	int i;
+	int tmp = 0;
 	uint32_t rdata;
 	
-	while(readlen < rqlen)
+	printf("DMAread\n");
+	while(readlen < rqlen){
 		if(rqlen - readlen >1024)
 			len = 4096;
 		else
-			len = readlen*4;
+			len = (rqlen - readlen)*4;
 		
+		printf("len%d\n",len);
+		*dma->S2MM_DA = DMABUF_ADDR;
 		dma->S2MM_DMACR->bit.RS = 1;
 		*dma->S2MM_LENGTH = len;
-		
-		while(1){
+		for(i=0;1;i++){
 			if(dma->S2MM_DMASR->bit.Idle == 1)
 				break;
 			if(dma->S2MM_DMASR->bit.DMAIntErr==1){
@@ -137,13 +142,24 @@ int DMA_read(struct DMA_st *dma,int rqlen,void *buf,void (*format)(void *,uint32
 				printf("SlvErr\n");
 				return -1;
 			}
+			
+			if(i>8192){
+				printf("DMAtimeout\n");
+				return -1;
+			}
 		}
-		readlen += *dma->S2MM_LENGTH/4
+		readlen += *dma->S2MM_LENGTH/4;
 		printf("dataread:%d\n",*dma->S2MM_LENGTH);
+
+		/*for(i=0;i < *dma->S2MM_LENGTH /4;i++){
+		rdata=*((uint32_t *)(dma->dmabuf + 4*i));
+		printf("%04d,0x%08x\n",i,rdata);
+		}*/
 
 		for(i=0;i < *dma->S2MM_LENGTH /4;i++){
 			rdata=*((uint32_t *)(dma->dmabuf + 4*i));
 			(*format)(buf, rdata,i);
 		}
-	
+	}
+	return 0;
 }
