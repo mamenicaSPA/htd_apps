@@ -11,8 +11,8 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include "websocket.h"
-#include "dma.h"
+#include "../../src/websocket.h"
+#include "../../src/dma.h"
 #include "oscillo.h"
 
 #define GPIO_START	0x00000001
